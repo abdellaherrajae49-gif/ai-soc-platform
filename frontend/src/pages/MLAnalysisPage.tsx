@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search, Bell, Settings, HelpCircle,
   GitBranch, TrendingUp, Snowflake, ScatterChart,
-  Shield,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import ChatbotWidget from '../components/ChatbotWidget';
