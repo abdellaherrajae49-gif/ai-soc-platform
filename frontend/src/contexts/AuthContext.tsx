@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { login as apiLogin, getMe } from '../api/api';
+import { login as apiLogin } from '../api/api';
 
 export type Role = 'employee' | 'expert' | 'admin';
 

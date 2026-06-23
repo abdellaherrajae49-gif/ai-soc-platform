@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   BookOpen, ShieldAlert, Wifi, Smartphone, ChevronRight, ChevronDown,
-  GraduationCap, Brain, MessageCircle, CheckCircle, AlertTriangle,
+  GraduationCap, Brain, MessageCircle, AlertTriangle,
   Lock, Eye, Zap, Award, ArrowRight, Send, Bot, User, Loader,
 } from 'lucide-react';
 import { COURSES, DEFAULT_COURSE } from '../data/courses';

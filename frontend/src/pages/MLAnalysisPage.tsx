@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Brain, Zap, Shield, AlertTriangle, CheckCircle, TrendingUp, Cpu, Activity, RefreshCw, ChevronRight, Database } from 'lucide-react';
+import { Brain, Zap, Shield, AlertTriangle, CheckCircle, TrendingUp, Cpu, Activity, RefreshCw, Database } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import ChatbotWidget from '../components/ChatbotWidget';
-import { mlPredict, mlBatchPredict, mlMetadata, getAlerts } from '../api/api';
+import { mlBatchPredict, mlMetadata, getAlerts } from '../api/api';
 import type { MLPrediction, Alert } from '../api/api';
 
 // ── Couleurs de sévérité ────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ const MLAnalysisPage: React.FC = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [stats, setStats]         = useState({ attacks: 0, fp: 0, anomalies: 0, critical: 0 });
   const [selected, setSelected]   = useState<EnrichedAlert | null>(null);
-  const [metaError, setMetaError] = useState(false);
+  const [, setMetaError] = useState(false);
 
   // Load model metadata
   useEffect(() => {
@@ -268,7 +268,7 @@ const MLAnalysisPage: React.FC = () => {
                         ))}
                       </tr>
                     ))
-                  ) : alerts.map((a, i) => (
+                  ) : alerts.map((a) => (
                     <tr
                       key={a.id}
                       onClick={() => setSelected(a)}

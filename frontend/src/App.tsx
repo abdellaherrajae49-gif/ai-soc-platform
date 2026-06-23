@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import type { Role } from './contexts/AuthContext';
 import Login from './pages/Login';
 import DashboardEmployee from './pages/DashboardEmployee';
-import DashboardExpert from './pages/DashboardExpert';
+// DashboardExpert route handled via MLAnalysisPage
 import MLAnalysisPage from './pages/MLAnalysisPage';
 import DashboardAdmin from './pages/DashboardAdmin';
 import CyberAcademyPage from './pages/CyberAcademyPage';

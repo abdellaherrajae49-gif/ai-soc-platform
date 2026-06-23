@@ -583,16 +583,32 @@ app.post('/api/webhook/vulnscan', async (req, res) => {
 // ── ML Predict (Priorité 2.4) ───────────────────────────────────────────────────
 const ML_MODEL_DIR = path.join(__dirname, '..', 'ml', 'models');
 const ML_SCRIPT    = path.join(__dirname, '..', 'ml', 'ml_predict.py');
+const LOCAL_VENV_PYTHON = process.platform === 'win32'
+  ? path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe')
+  : path.join(__dirname, '..', '.venv', 'bin', 'python');
+const PYTHON_BIN   = process.env.PYTHON_BIN || (
+  require('fs').existsSync(LOCAL_VENV_PYTHON)
+    ? `"${LOCAL_VENV_PYTHON}"`
+    : (process.platform === 'win32' ? 'py -3' : 'python3')
+);
+
+function runPythonInline(code, payload) {
+  const escapedPayload = JSON.stringify(payload).replace(/"/g, '\\"');
+  return require('child_process').execSync(
+    `${PYTHON_BIN} -c "${code}" "${escapedPayload}"`,
+    {
+      env: { ...process.env, MODEL_DIR: ML_MODEL_DIR, PYTHONIOENCODING: 'utf-8' },
+      encoding: 'utf8',
+    }
+  );
+}
 
 app.post('/api/ml/predict', authMiddleware, async (req, res) => {
   const alert = req.body; // { priority, src_port, dst_port, packet_count, alert_frequency, hour_of_day, is_internal_src, bytes_total, duration_sec }
   try {
-    const { execSync } = require('child_process');
-    // Passe l'alerte complète en JSON via stdin pour éviter les injections
-    const alertJson = JSON.stringify(alert).replace(/"/g, '\\"');
-    const result = execSync(
-      `python -c "import json,sys,os; os.environ['MODEL_DIR']='${ML_MODEL_DIR.replace(/\\/g, '/')}'; sys.path.insert(0,'${path.join(__dirname,'..','ml').replace(/\\/g,'/')}'); from ml_predict import load_models, predict_alert; m=load_models(); a=json.loads(sys.argv[1]); print(json.dumps(predict_alert(a,m)))" "${alertJson}"`,
-      { env: { ...process.env, MODEL_DIR: ML_MODEL_DIR, PYTHONIOENCODING: 'utf-8' }, encoding: 'utf8' }
+    const result = runPythonInline(
+      `import json,sys,os; os.environ['MODEL_DIR']='${ML_MODEL_DIR.replace(/\\/g, '/')}'; sys.path.insert(0,'${path.join(__dirname,'..','ml').replace(/\\/g,'/')}'); from ml_predict import load_models, predict_alert; m=load_models(); a=json.loads(sys.argv[1]); print(json.dumps(predict_alert(a,m)))`,
+      alert
     );
     res.json(JSON.parse(result.trim()));
   } catch (e) {
@@ -605,11 +621,9 @@ app.post('/api/ml/batch', authMiddleware, async (req, res) => {
   const { alerts } = req.body; // Array of alert objects
   if (!alerts || !Array.isArray(alerts)) return res.status(400).json({ error: 'alerts array required' });
   try {
-    const { execSync } = require('child_process');
-    const alertsJson = JSON.stringify(alerts).replace(/"/g, '\\"');
-    const result = execSync(
-      `python -c "import json,sys,os; os.environ['MODEL_DIR']='${ML_MODEL_DIR.replace(/\\/g, '/')}'; sys.path.insert(0,'${path.join(__dirname,'..','ml').replace(/\\/g,'/')}'); from ml_predict import load_models, batch_predict; m=load_models(); a=json.loads(sys.argv[1]); print(json.dumps(batch_predict(a,m)))" "${alertsJson}"`,
-      { env: { ...process.env, MODEL_DIR: ML_MODEL_DIR, PYTHONIOENCODING: 'utf-8' }, encoding: 'utf8' }
+    const result = runPythonInline(
+      `import json,sys,os; os.environ['MODEL_DIR']='${ML_MODEL_DIR.replace(/\\/g, '/')}'; sys.path.insert(0,'${path.join(__dirname,'..','ml').replace(/\\/g,'/')}'); from ml_predict import load_models, batch_predict; m=load_models(); a=json.loads(sys.argv[1]); print(json.dumps(batch_predict(a,m)))`,
+      alerts
     );
     res.json(JSON.parse(result.trim()));
   } catch (e) {

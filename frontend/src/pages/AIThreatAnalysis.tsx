@@ -74,7 +74,7 @@ const ConfidenceRing: React.FC<{ pct: number }> = ({ pct }) => {
   );
 };
 
-const AIThreatAnalysis: React.FC<AIThreatAnalysisProps> = ({ filename, results }) => {
+const AIThreatAnalysis: React.FC<AIThreatAnalysisProps> = ({ filename: _filename, results }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 

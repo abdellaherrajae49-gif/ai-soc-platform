@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Shield, Bell, Activity, Settings, LogOut, Globe, FileText, Radar, Crosshair, BookOpen } from 'lucide-react';
+import { Bell, Activity, Settings, LogOut, Radar, Crosshair, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Role } from '../contexts/AuthContext';
 
@@ -25,20 +25,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin',    icon: <Settings size={18} />,  label: 'Admin',      roles: ['admin'],                     id: 'nav-admin'    },
 ];
 
-const ROLE_COLORS: Record<Role, string> = {
-  employee: '#3b82f6',
-  expert:   '#7c3aed',
-  admin:    '#f59e0b',
-};
-
-const ROLE_LABELS: Record<Role, string> = {
-  employee: '👤 Employee',
-  expert:   '🔬 Expert',
-  admin:    '👑 Admin',
-};
-
 const Sidebar: React.FC<SidebarProps> = ({ role }) => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -50,31 +38,14 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
 
   return (
     <aside className="sidebar">
-      {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Shield size={24} />
-        </div>
+        <div className="sidebar-logo-icon">SI</div>
         <div>
-          <span className="sidebar-logo-title">SOC</span>
-          <span className="sidebar-logo-sub">Intelligente</span>
+          <span className="sidebar-logo-title">SOC Intelligente</span>
+          <span className="sidebar-logo-sub">Enterprise Security</span>
         </div>
       </div>
 
-      {/* User chip */}
-      <div className="sidebar-user" style={{ borderColor: ROLE_COLORS[role] }}>
-        <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] }}>
-          {user?.username?.[0]?.toUpperCase() ?? '?'}
-        </div>
-        <div>
-          <p className="sidebar-username">{user?.username}</p>
-          <p className="sidebar-role" style={{ color: ROLE_COLORS[role] }}>
-            {ROLE_LABELS[role]}
-          </p>
-        </div>
-      </div>
-
-      {/* Nav */}
       <nav className="sidebar-nav">
         {visibleItems.map(item => (
           <NavLink
@@ -89,26 +60,16 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         ))}
       </nav>
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Footer */}
       <div className="sidebar-footer">
-        <div className="sidebar-status">
-          <div className="status-dot online" />
-          <span>SOC-Center: 192.168.10.10</span>
-        </div>
-        <div className="sidebar-status">
-          <Globe size={11} />
-          <span>Wazuh · Suricata · InfluxDB</span>
-        </div>
         <button
           id="logout-btn"
           className="sidebar-logout"
           onClick={handleLogout}
           title="Déconnexion"
         >
-          <LogOut size={15} />
+          <LogOut size={16} />
           Déconnexion
         </button>
       </div>

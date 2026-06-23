@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Activity, Globe, HardDrive, AlertTriangle,
-  Clock, Cpu, RefreshCw, ChevronLeft, Shield,
+  Clock, Cpu, RefreshCw, ChevronLeft,
 } from 'lucide-react';
 
 /* ── Mock Dynamic Data ──────────────────────────────────────────────── */
@@ -57,7 +57,7 @@ interface DynamicAnalysisDashboardProps {
   onBack: () => void;
 }
 
-const DynamicAnalysisDashboard: React.FC<DynamicAnalysisDashboardProps> = ({ filename, onBack }) => {
+const DynamicAnalysisDashboard: React.FC<DynamicAnalysisDashboardProps> = ({ filename: _filename, onBack }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {

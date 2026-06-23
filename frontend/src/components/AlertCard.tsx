@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { AlertCircle, ChevronDown, ChevronUp, Clock, Target, Wifi } from 'lucide-react';
-import type { Alert } from '../api/api';
+import { BASE_URL, type Alert as AlertItem } from '../api/api';
 
 interface AlertCardProps {
-  alert: Alert;
+  alert: AlertItem;
   readOnly?: boolean;
 }
 
@@ -78,14 +78,14 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, readOnly = false }) => {
               <button
                 id={`alert-acknowledge-${alert.id}`}
                 className="btn-action btn-acknowledge"
-                onClick={(e) => { e.stopPropagation(); alert('Alert acknowledged.'); }}
+                onClick={(e) => { e.stopPropagation(); window.alert('Alert acknowledged.'); }}
               >
                 ✓ Acquitter
               </button>
               <button
                 id={`alert-escalate-${alert.id}`}
                 className="btn-action btn-escalate"
-                onClick={(e) => { e.stopPropagation(); alert('Alert escalated.'); }}
+                onClick={(e) => { e.stopPropagation(); window.alert('Alert escalated.'); }}
               >
                 ↑ Escalader
               </button>
@@ -95,7 +95,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, readOnly = false }) => {
                 onClick={async (e) => { 
                   e.stopPropagation(); 
                   try {
-                    const res = await fetch('http://192.168.7.174:5000/api/actions/block-ip', {
+                    const res = await fetch(`${BASE_URL}/api/actions/block-ip`, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
@@ -104,10 +104,10 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, readOnly = false }) => {
                       body: JSON.stringify({ ip: alert.src_ip })
                     });
                     const data = await res.json();
-                    if (res.ok) alert(`Success: ${data.message}`);
-                    else alert(`Error: ${data.error}`);
-                  } catch (err) {
-                    alert('Error: Could not reach the server.');
+                    if (res.ok) window.alert(`Success: ${data.message}`);
+                    else window.alert(`Error: ${data.error}`);
+                  } catch (_err) {
+                    window.alert('Error: Could not reach the server.');
                   }
                 }}
               >

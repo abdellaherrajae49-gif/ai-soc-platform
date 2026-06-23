@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askChatbot } from '../api/api';
-import { Send, X, Bot, User, Loader } from 'lucide-react';
+import { Send, X, Bot, Loader } from 'lucide-react';
 
 interface MessageOption {
   label: string;
