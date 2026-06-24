@@ -4130,7 +4130,7 @@ img, svg { display: block; }
   position: relative;
   display: grid;
   grid-template-columns: clamp(260px, 25vw, 330px) minmax(0, 1fr);
-  min-height: 720px;
+  height: clamp(720px, calc(100vh - 180px), 1200px);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 24px;
   overflow: hidden;
