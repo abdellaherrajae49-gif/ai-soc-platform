@@ -428,10 +428,7 @@ export const CyberAcademy: React.FC = () => {
                       {selectedTopic?.category || 'Module'}
                     </span>
                     <span className="academy-pill">
-                      <Clock3 size={14} /> 5 min
-                    </span>
-                    <span className="academy-pill">
-                      <Brain size={14} /> Quiz IA disponible
+                      <Clock3 size={14} /> 5 min de lecture
                     </span>
                   </div>
                   <h1 className="academy-title">{course.title}</h1>

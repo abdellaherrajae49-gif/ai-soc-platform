@@ -120,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
 
   return (
     <>
-      {isMobile && (
+      {isMobile && !mobileOpen && (
         <button
           type="button"
           className="mobile-menu-btn"
