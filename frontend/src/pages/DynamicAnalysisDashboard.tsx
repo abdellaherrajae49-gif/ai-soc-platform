@@ -90,12 +90,6 @@ const DynamicAnalysisDashboard: React.FC<DynamicAnalysisDashboardProps> = ({ fil
         </div>
       </div>
 
-      {/* Simulated notice */}
-      <div className="dyn-notice">
-        <AlertTriangle size={16} style={{ color: '#fbbf24' }} />
-        <span>Simulated results — set <code>DYNAMIC_ENABLED=true</code> in backend env and connect an Android device for real analysis.</span>
-      </div>
-
       {/* Summary Cards */}
       <div className="dyn-summary-grid">
         {/* Risk Card */}

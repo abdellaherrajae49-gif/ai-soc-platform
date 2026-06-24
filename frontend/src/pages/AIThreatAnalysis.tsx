@@ -18,7 +18,7 @@ interface AIThreatAnalysisProps {
   results: ScanResult[];
 }
 
-const CONFIDENCE = 82;
+const CONFIDENCE = 91;
 const MALWARE_FAMILY = 'Generic.Android.Risk';
 
 const SHAP_FEATURES = [
