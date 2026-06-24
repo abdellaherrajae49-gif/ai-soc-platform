@@ -275,7 +275,7 @@ export const CyberAcademy: React.FC = () => {
   const selectCourse = (id: string) => {
     setSelectedId(id);
     setActiveTab('cours');
-    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    mainRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (

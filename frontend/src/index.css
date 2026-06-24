@@ -4031,10 +4031,9 @@ img, svg { display: block; }
   display: grid;
   grid-template-columns: clamp(260px, 25vw, 330px) minmax(0, 1fr);
   min-height: 600px;
-  max-height: calc(100vh - 140px);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 24px;
-  overflow: hidden;
+  overflow: visible;
   background: #f8fafc;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 }
@@ -4045,8 +4044,7 @@ img, svg { display: block; }
   background: #ffffff;
   border-right: 1px solid rgba(226, 232, 240, 0.95);
   color: #334155;
-  overflow-y: auto;
-  min-height: 0;
+  overflow: visible;
 }
 
 .academy-sidebar-header {
@@ -4311,8 +4309,7 @@ img, svg { display: block; }
 
 .academy-main {
   padding: 28px 30px 30px;
-  overflow-y: auto;
-  min-height: 0;
+  overflow: visible;
   background: #f8fafc;
 }
 
