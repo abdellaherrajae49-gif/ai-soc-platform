@@ -155,7 +155,7 @@ const DashboardExpert: React.FC = () => {
                 <div key={inc.id} className={`incident-full severity-${inc.severity}`}>
                   <div className="incident-header">
                     <span className={`badge-severity ${inc.severity}`}>{inc.severity.toUpperCase()}</span>
-                    <span className="incident-status status-{inc.status}">{inc.status}</span>
+                    <span className={`incident-status status-${inc.status}`}>{inc.status}</span>
                   </div>
                   <p className="incident-desc-full">{inc.description}</p>
                   <div className="incident-footer">

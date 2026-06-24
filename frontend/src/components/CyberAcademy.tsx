@@ -110,6 +110,23 @@ function buildKeyPoints(course: Course): string[] {
     .slice(0, 3);
 }
 
+function renderFormattedText(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part.includes('\n')
+      ? part.split('\n').map((line, j) => (
+          <React.Fragment key={`${i}-${j}`}>
+            {j > 0 && <br />}
+            {line}
+          </React.Fragment>
+        ))
+      : part;
+  });
+}
+
 const QuizChat: React.FC<{ course: Course }> = ({ course }) => {
   const [messages, setMessages] = useState<QMsg[]>([]);
   const [input, setInput] = useState('');
@@ -147,9 +164,6 @@ const QuizChat: React.FC<{ course: Course }> = ({ course }) => {
     setStarted(true);
     send(course.quizPrompt);
   };
-
-  const renderText = (text: string) =>
-    text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
 
   if (!started) {
     return (
@@ -193,7 +207,7 @@ const QuizChat: React.FC<{ course: Course }> = ({ course }) => {
               {msg.role === 'bot' ? <Bot size={12} /> : <User size={12} />}
             </div>
             <div className={`chat-bubble chat-bubble-${msg.role}`}>
-              <p dangerouslySetInnerHTML={{ __html: renderText(msg.text) }} />
+              <p>{renderFormattedText(msg.text)}</p>
             </div>
           </div>
         ))}
@@ -236,6 +250,7 @@ export const CyberAcademy: React.FC = () => {
   const [expandedCat, setExpandedCat] = useState<string | null>('Attaques reseau');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'cours' | 'quiz'>('cours');
+  const mainRef = useRef<HTMLDivElement>(null);
 
   const topicCount = TOPICS.length;
   const courseCount = TOPICS.reduce((total, topic) => total + topic.items.length, 0);
@@ -256,6 +271,12 @@ export const CyberAcademy: React.FC = () => {
         "Choisir une premiere action de prevention ou d'escalade.",
       ]
     : [];
+
+  const selectCourse = (id: string) => {
+    setSelectedId(id);
+    setActiveTab('cours');
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <section className="academy-shell">
@@ -320,10 +341,7 @@ export const CyberAcademy: React.FC = () => {
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => {
-                            setSelectedId(item.id);
-                            setActiveTab('cours');
-                          }}
+                          onClick={() => selectCourse(item.id)}
                           className={`academy-item-btn ${selectedId === item.id ? 'active' : ''}`}
                         >
                           <BookOpen size={13} />
@@ -346,7 +364,7 @@ export const CyberAcademy: React.FC = () => {
           </div>
         </aside>
 
-        <div className="academy-main">
+        <div className="academy-main" ref={mainRef}>
           {!course ? (
             <div className="academy-empty">
               <div className="academy-empty-hero">
@@ -404,7 +422,7 @@ export const CyberAcademy: React.FC = () => {
                 <article className="academy-feature">
                   <BookOpen size={22} />
                   <strong>Cours pre-rediges</strong>
-                  <span>Des explications courtes et professionnelles, prêtes pour la sensibilisation interne.</span>
+                  <span>Des explications courtes et professionnelles, pretes pour la sensibilisation interne.</span>
                 </article>
                 <article className="academy-feature">
                   <Lock size={22} />

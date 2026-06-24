@@ -80,7 +80,6 @@ export const getMetricsHistory = (minutes = 60) =>
 
 // ── Chatbot ───────────────────────────────────────────────────────────────────
 export const askChatbot = async (message: string, context?: string) => {
-  try {
     const infraContext = `
 TOPOLOGIE ET INFRASTRUCTURE DU SOC:
 - Réseaux: LAN A1 (192.168.10.0/24, GW: 192.168.10.1, VMnet2), DMZ A2 (192.168.20.0/24, GW: 192.168.20.1, VMnet3), Secondary A3 (192.168.30.0/24, GW: 192.168.30.1, VMnet4), OpenVPN (10.0.0.0/24).
@@ -95,27 +94,11 @@ TOPOLOGIE ET INFRASTRUCTURE DU SOC:
 Utilise ces adresses IP exactes pour répondre aux questions de l'administrateur.
 `;
 
-    const prompt = `Tu es un assistant expert en cybersécurité SOC.\n${infraContext}\n\nContexte additionnel:\n${context || 'Aucun'}\n\nQuestion: ${message}`;
-      
-    const res = await fetch('http://127.0.0.1:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'mistral:7b-instruct-q4_0',
-        prompt,
-        stream: false
-      })
-    });
-    if (!res.ok) throw new Error('Ollama HTTP error');
-    const data = await res.json();
-    return { data: { response: data.response } };
-  } catch (e) {
-    // Fallback to backend proxy if direct connection fails
+    const mergedContext = `${infraContext}\nContexte additionnel:\n${context || 'Aucun'}`;
     return api.post<{ response: string; model?: string; duration?: number }>(
       '/ai/chat',
-      { message, context }
+      { message, context: mergedContext }
     );
-  }
 };
 
 // ── Incidents ─────────────────────────────────────────────────────────────────

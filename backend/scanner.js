@@ -17,6 +17,8 @@ async function analyzeAPK(apkPath, originalName) {
   const jadxOut = path.join(outDir, 'jadx');
 
   const results = [];
+  let analysisArtifactsRead = 0;
+  let staticToolSucceeded = false;
   
   try {
     await fs.mkdir(outDir, { recursive: true });
@@ -25,6 +27,7 @@ async function analyzeAPK(apkPath, originalName) {
     try {
       console.log(`[VulnScan] Running apktool on ${originalName}...`);
       await execAsync(`java -jar "${APKTOOL_JAR}" d -f -o "${apktoolOut}" "${apkPath}"`);
+      staticToolSucceeded = true;
     } catch (e) {
       console.error(`[VulnScan] Apktool error:`, e.message);
     }
@@ -33,6 +36,7 @@ async function analyzeAPK(apkPath, originalName) {
     try {
       console.log(`[VulnScan] Running jadx on ${originalName}...`);
       await execAsync(`"${JADX_BIN}" -d "${jadxOut}" "${apkPath}"`);
+      staticToolSucceeded = true;
     } catch (e) {
       console.error(`[VulnScan] Jadx error:`, e.message);
     }
@@ -41,6 +45,7 @@ async function analyzeAPK(apkPath, originalName) {
     const manifestPath = path.join(apktoolOut, 'AndroidManifest.xml');
     try {
       const manifestStr = await fs.readFile(manifestPath, 'utf8');
+      analysisArtifactsRead += 1;
       
       if (manifestStr.includes('android:exported="true"')) {
         results.push({
@@ -75,6 +80,7 @@ async function analyzeAPK(apkPath, originalName) {
     const stringsPath = path.join(apktoolOut, 'res', 'values', 'strings.xml');
     try {
       const stringsStr = await fs.readFile(stringsPath, 'utf8');
+      analysisArtifactsRead += 1;
       if (stringsStr.match(/api_key|password|secret|token|credentials/i)) {
          results.push({
           id: crypto.randomBytes(4).toString('hex'),
@@ -91,6 +97,10 @@ async function analyzeAPK(apkPath, originalName) {
       // strings.xml might not exist
     }
 
+    if (!staticToolSucceeded || analysisArtifactsRead === 0) {
+      throw new Error('Les outils d’analyse n’ont produit aucun artefact exploitable');
+    }
+
     // 5. Basic fallback if nothing found
     if (results.length === 0) {
       results.push({
@@ -105,7 +115,8 @@ async function analyzeAPK(apkPath, originalName) {
       });
     }
     
-    // Add dynamic fake results to simulate DAST since we can't easily emulate DAST right now
+    // Optional demo-only dynamic result
+    if (process.env.ENABLE_FAKE_DYNAMIC_SCAN === 'true') {
     results.push({
       id: crypto.randomBytes(4).toString('hex'),
       name: 'Cleartext HTTP Traffic (Runtime)',
@@ -116,6 +127,7 @@ async function analyzeAPK(apkPath, originalName) {
       detail: 'Analyse dynamique (DAST) : Interception réseau a détecté des requêtes HTTP vers le port 80.',
       simpleExplain: 'Pendant l\'utilisation, l\'application a envoyé des informations non sécurisées sur internet.'
     });
+    }
 
     // Cleanup 
     try {

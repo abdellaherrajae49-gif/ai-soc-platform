@@ -23,7 +23,10 @@ const jwt        = require('jsonwebtoken');
 const { InfluxDB } = require('@influxdata/influxdb-client');
 const fetch      = require('node-fetch');
 const http       = require('http');
+const os         = require('os');
 const path       = require('path');
+const fs         = require('fs');
+const { execSync, exec } = require('child_process');
 const { WebSocketServer } = require('ws');
 const multer     = require('multer');
 const scanner    = require('./scanner');
@@ -43,6 +46,8 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'mistral:7b-instruct-q4_0';
 const NEO4J_URI  = process.env.NEO4J_URI  || 'bolt://localhost:7687';
 const NEO4J_USER = process.env.NEO4J_USER || 'neo4j';
 const NEO4J_PASS = process.env.NEO4J_PASS || 'abd3llah';
+const DISCORD_ACTION_TOKEN = process.env.DISCORD_ACTION_TOKEN || '';
+const ACTIVE_RESPONSE_ENABLED = process.env.ACTIVE_RESPONSE_ENABLED === 'true';
 
 // ── Utilisateurs (PROD: remplacer par BDD) ────────────────────────────────────
 const USERS = {
@@ -319,7 +324,14 @@ Réponds toujours en français, de manière concise et structurée.
 Si on te demande d'analyser une alerte, fournis : sévérité, type d'attaque probable, recommandation.`;
 
   let topoContext = "";
-  if (neo4jDriver && message.toLowerCase().includes("topologie") || message.toLowerCase().includes("réseau") || message.toLowerCase().includes("ip")) {
+  if (
+    neo4jDriver &&
+    (
+      message.toLowerCase().includes("topologie") ||
+      message.toLowerCase().includes("réseau") ||
+      message.toLowerCase().includes("ip")
+    )
+  ) {
     try {
       const session = neo4jDriver.session();
       const result = await session.run(`MATCH (n) RETURN n.name AS name, n.ip AS ip`);
@@ -485,9 +497,8 @@ app.get('/admin/stats', authMiddleware, roleMiddleware('admin'), async (req, res
 
 // ── Actions Actives — Bloquer une IP ──────────────────────────────────────────
 app.post('/api/actions/block-ip', authMiddleware, roleMiddleware('expert', 'admin'), async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ error: 'IP requise' });
-  const { execSync } = require('child_process');
+  handleBlockIp(req, res, 'manual');
+  return;
   try {
     execSync(`iptables -A INPUT -s ${ip} -j DROP`);
     broadcastAlert({ type: 'ip_blocked', ip, by: req.user.username });
@@ -499,9 +510,8 @@ app.post('/api/actions/block-ip', authMiddleware, roleMiddleware('expert', 'admi
 
 // ── Actions Actives — Isoler un Host ──────────────────────────────────────────
 app.post('/api/actions/isolate-host', authMiddleware, roleMiddleware('expert', 'admin'), async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ error: 'IP requise' });
-  const { execSync } = require('child_process');
+  handleIsolateHost(req, res);
+  return;
   try {
     execSync(`iptables -A INPUT -s ${ip} -j DROP`);
     execSync(`iptables -A OUTPUT -d ${ip} -j DROP`);
@@ -696,11 +706,9 @@ function getMockTopologyEdges() {
 }
 
 // ── Incident Response — Block / Isolate ───────────────────────────────────────
-const { exec } = require('child_process');
 
 // Liste en mémoire des IPs bloquées (persistée dans un fichier JSON)
-const BLOCKED_IPS_FILE = '/tmp/soc_blocked_ips.json';
-const fs = require('fs');
+const BLOCKED_IPS_FILE = path.join(os.tmpdir(), 'soc_blocked_ips.json');
 
 function loadBlockedIPs() {
   try {
@@ -717,12 +725,119 @@ function saveBlockedIPs(list) {
 
 let blockedIPs = loadBlockedIPs();
 
+function isValidIPv4(ip) {
+  return typeof ip === 'string' && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
+}
+
+function executeContainment(command, onDone) {
+  if (!ACTIVE_RESPONSE_ENABLED || process.platform !== 'linux') {
+    return onDone(null, '', 'simulated');
+  }
+  exec(command, onDone);
+}
+
+function addBlockedIpEntry(ip, details) {
+  const existing = blockedIPs.find((entry) => entry.ip === ip);
+  if (existing) return existing;
+
+  const entry = { ip, ...details };
+  blockedIPs.push(entry);
+  saveBlockedIPs(blockedIPs);
+  return entry;
+}
+
+function removeBlockedIpEntry(ip) {
+  blockedIPs = blockedIPs.filter((entry) => entry.ip !== ip);
+  saveBlockedIPs(blockedIPs);
+}
+
+function handleBlockIp(req, res, source = 'manual') {
+  const { ip, reason } = req.body || {};
+  if (!isValidIPv4(ip)) {
+    return res.status(400).json({ error: 'IP invalide' });
+  }
+  if (blockedIPs.find((entry) => entry.ip === ip)) {
+    return res.json({ success: true, message: `IP ${ip} déjà bloquée`, already: true });
+  }
+
+  const command = `sudo iptables -I INPUT -s ${ip} -j DROP && sudo iptables -I FORWARD -s ${ip} -j DROP`;
+  executeContainment(command, (err, _stdout, stderr) => {
+    if (err) {
+      console.error(`[block-ip] Erreur iptables: ${stderr || err.message}`);
+      return res.status(500).json({ error: 'Impossible de bloquer l\'IP sur cet hôte' });
+    }
+
+    const simulated = !ACTIVE_RESPONSE_ENABLED || process.platform !== 'linux';
+    const entry = addBlockedIpEntry(ip, {
+      reason: reason || (source === 'discord' ? 'Bloqué via Discord' : 'Bloqué manuellement'),
+      blockedAt: new Date().toISOString(),
+      blockedBy: req.user?.username || 'system',
+      simulated,
+    });
+    console.log(`[block-ip] ✅ IP ${ip} bloquée par ${entry.blockedBy}`);
+    return res.json({
+      success: true,
+      message: simulated
+        ? `Simulation enregistrée pour l'IP ${ip}`
+        : `IP ${ip} bloquée avec succès`,
+      entry,
+    });
+  });
+}
+
+function handleIsolateHost(req, res) {
+  const { ip, hostname } = req.body || {};
+  if (!isValidIPv4(ip)) {
+    return res.status(400).json({ error: 'IP invalide' });
+  }
+
+  const command = [
+    `sudo iptables -I INPUT -s ${ip} -j DROP`,
+    `sudo iptables -I OUTPUT -d ${ip} -j DROP`,
+    `sudo iptables -I FORWARD -s ${ip} -j DROP`,
+    `sudo iptables -I FORWARD -d ${ip} -j DROP`,
+  ].join(' && ');
+
+  executeContainment(command, (err, _stdout, stderr) => {
+    if (err) {
+      console.error(`[isolate-host] Erreur: ${stderr || err.message}`);
+      return res.status(500).json({ error: 'Impossible d\'isoler cet hôte sur cet environnement' });
+    }
+
+    const simulated = !ACTIVE_RESPONSE_ENABLED || process.platform !== 'linux';
+    const entry = addBlockedIpEntry(ip, {
+      hostname: hostname || ip,
+      reason: 'Hôte isolé (toutes directions)',
+      isolatedAt: new Date().toISOString(),
+      isolatedBy: req.user?.username || 'system',
+      simulated,
+    });
+    console.log(`[isolate-host] 🔒 Hôte ${ip} (${hostname || ip}) isolé`);
+    return res.json({
+      success: true,
+      message: simulated
+        ? `Simulation enregistrée pour l'hôte ${ip}`
+        : `Hôte ${ip} isolé avec succès`,
+      entry,
+    });
+  });
+}
+
+function hasDiscordActionAccess(req) {
+  const actionToken = req.headers['x-discord-action-token'];
+  if (!DISCORD_ACTION_TOKEN) return false;
+  if (Array.isArray(actionToken)) return actionToken.includes(DISCORD_ACTION_TOKEN);
+  return actionToken === DISCORD_ACTION_TOKEN;
+}
+
 /**
  * POST /api/block-ip
  * Body: { ip: "x.x.x.x", reason: "string" }
  * Bloque une IP via iptables (DROP INPUT + FORWARD)
  */
-app.post('/api/block-ip', auth, (req, res) => {
+app.post('/api/block-ip', authMiddleware, (req, res) => {
+  handleBlockIp(req, res, 'manual');
+  return;
   const { ip, reason } = req.body;
   if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
     return res.status(400).json({ error: 'IP invalide' });
@@ -756,7 +871,15 @@ app.post('/api/block-ip', auth, (req, res) => {
  * Body: { ip: "x.x.x.x" }
  * Débloque une IP (supprime la règle iptables)
  */
-app.post('/api/unblock-ip', auth, (req, res) => {
+app.post('/api/unblock-ip', authMiddleware, (req, res) => {
+  if (!ACTIVE_RESPONSE_ENABLED || process.platform !== 'linux') {
+    const { ip } = req.body || {};
+    if (!isValidIPv4(ip)) {
+      return res.status(400).json({ error: 'IP invalide' });
+    }
+    removeBlockedIpEntry(ip);
+    return res.json({ success: true, message: `Simulation supprimée pour l'IP ${ip}` });
+  }
   const { ip } = req.body;
   if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
     return res.status(400).json({ error: 'IP invalide' });
@@ -774,7 +897,7 @@ app.post('/api/unblock-ip', auth, (req, res) => {
  * GET /api/blocked-ips
  * Retourne la liste des IPs actuellement bloquées
  */
-app.get('/api/blocked-ips', auth, (_req, res) => {
+app.get('/api/blocked-ips', authMiddleware, (_req, res) => {
   res.json({ blockedIPs, total: blockedIPs.length });
 });
 
@@ -783,7 +906,9 @@ app.get('/api/blocked-ips', auth, (_req, res) => {
  * Body: { ip: "x.x.x.x", hostname: "string" }
  * Isole complètement un hôte compromis (bloque toutes les directions)
  */
-app.post('/api/isolate-host', auth, (req, res) => {
+app.post('/api/isolate-host', authMiddleware, (req, res) => {
+  handleIsolateHost(req, res);
+  return;
   const { ip, hostname } = req.body;
   if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
     return res.status(400).json({ error: 'IP invalide' });
@@ -814,10 +939,16 @@ app.post('/api/isolate-host', auth, (req, res) => {
  * Endpoint appelé par le bot Discord quand on clique sur un bouton
  */
 app.post('/api/discord-action', (req, res) => {
-  const { action, ip, alert_id } = req.body;
+  if (!hasDiscordActionAccess(req)) {
+    return res.status(401).json({ error: 'Authentification Discord requise' });
+  }
+
+  req.user = { username: 'discord-bot', role: 'system' };
+  const { action, ip, alert_id } = req.body || {};
   console.log(`[discord-action] Action="${action}" IP=${ip} AlertID=${alert_id}`);
 
   if (action === 'block' && ip) {
+    return handleBlockIp(req, res, 'discord');
     if (!blockedIPs.find(b => b.ip === ip)) {
       const cmd = `sudo iptables -I INPUT -s ${ip} -j DROP && sudo iptables -I FORWARD -s ${ip} -j DROP`;
       exec(cmd, () => {});
@@ -836,7 +967,7 @@ app.post('/api/discord-action', (req, res) => {
  * GET /api/academy
  * Retourne la liste des modules de formation disponibles
  */
-app.get('/api/academy', auth, (_req, res) => {
+app.get('/api/academy', authMiddleware, (_req, res) => {
   res.json({
     modules: [
       { id: 1, title: 'Introduction à la Cybersécurité', level: 'Débutant', duration: '2h', icon: '🛡️', completed: false },
