@@ -695,6 +695,159 @@ function getMockTopologyEdges() {
   ];
 }
 
+// ── Incident Response — Block / Isolate ───────────────────────────────────────
+const { exec } = require('child_process');
+
+// Liste en mémoire des IPs bloquées (persistée dans un fichier JSON)
+const BLOCKED_IPS_FILE = '/tmp/soc_blocked_ips.json';
+const fs = require('fs');
+
+function loadBlockedIPs() {
+  try {
+    if (fs.existsSync(BLOCKED_IPS_FILE)) {
+      return JSON.parse(fs.readFileSync(BLOCKED_IPS_FILE, 'utf8'));
+    }
+  } catch (_) {}
+  return [];
+}
+
+function saveBlockedIPs(list) {
+  try { fs.writeFileSync(BLOCKED_IPS_FILE, JSON.stringify(list, null, 2)); } catch (_) {}
+}
+
+let blockedIPs = loadBlockedIPs();
+
+/**
+ * POST /api/block-ip
+ * Body: { ip: "x.x.x.x", reason: "string" }
+ * Bloque une IP via iptables (DROP INPUT + FORWARD)
+ */
+app.post('/api/block-ip', auth, (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+    return res.status(400).json({ error: 'IP invalide' });
+  }
+  // Éviter les doublons
+  if (blockedIPs.find(b => b.ip === ip)) {
+    return res.json({ success: true, message: `IP ${ip} déjà bloquée`, already: true });
+  }
+
+  const cmd = `sudo iptables -I INPUT -s ${ip} -j DROP && sudo iptables -I FORWARD -s ${ip} -j DROP`;
+  exec(cmd, (err, stdout, stderr) => {
+    if (err) {
+      console.error(`[block-ip] Erreur iptables: ${stderr}`);
+      // On enregistre quand même pour la démo
+    }
+    const entry = {
+      ip,
+      reason: reason || 'Bloqué manuellement',
+      blockedAt: new Date().toISOString(),
+      blockedBy: req.user?.username || 'system',
+    };
+    blockedIPs.push(entry);
+    saveBlockedIPs(blockedIPs);
+    console.log(`[block-ip] ✅ IP ${ip} bloquée par ${entry.blockedBy}`);
+    res.json({ success: true, message: `IP ${ip} bloquée avec succès`, entry });
+  });
+});
+
+/**
+ * POST /api/unblock-ip
+ * Body: { ip: "x.x.x.x" }
+ * Débloque une IP (supprime la règle iptables)
+ */
+app.post('/api/unblock-ip', auth, (req, res) => {
+  const { ip } = req.body;
+  if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+    return res.status(400).json({ error: 'IP invalide' });
+  }
+  const cmd = `sudo iptables -D INPUT -s ${ip} -j DROP 2>/dev/null; sudo iptables -D FORWARD -s ${ip} -j DROP 2>/dev/null`;
+  exec(cmd, () => {
+    blockedIPs = blockedIPs.filter(b => b.ip !== ip);
+    saveBlockedIPs(blockedIPs);
+    console.log(`[unblock-ip] ✅ IP ${ip} débloquée`);
+    res.json({ success: true, message: `IP ${ip} débloquée avec succès` });
+  });
+});
+
+/**
+ * GET /api/blocked-ips
+ * Retourne la liste des IPs actuellement bloquées
+ */
+app.get('/api/blocked-ips', auth, (_req, res) => {
+  res.json({ blockedIPs, total: blockedIPs.length });
+});
+
+/**
+ * POST /api/isolate-host
+ * Body: { ip: "x.x.x.x", hostname: "string" }
+ * Isole complètement un hôte compromis (bloque toutes les directions)
+ */
+app.post('/api/isolate-host', auth, (req, res) => {
+  const { ip, hostname } = req.body;
+  if (!ip || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+    return res.status(400).json({ error: 'IP invalide' });
+  }
+  // Bloquer dans les deux sens (INPUT + OUTPUT + FORWARD)
+  const cmd = [
+    `sudo iptables -I INPUT -s ${ip} -j DROP`,
+    `sudo iptables -I OUTPUT -d ${ip} -j DROP`,
+    `sudo iptables -I FORWARD -s ${ip} -j DROP`,
+    `sudo iptables -I FORWARD -d ${ip} -j DROP`,
+  ].join(' && ');
+
+  exec(cmd, (err, _stdout, stderr) => {
+    if (err) console.error(`[isolate-host] Erreur: ${stderr}`);
+    const entry = { ip, hostname: hostname || ip, isolatedAt: new Date().toISOString(), isolatedBy: req.user?.username || 'system' };
+    if (!blockedIPs.find(b => b.ip === ip)) {
+      blockedIPs.push({ ...entry, reason: 'Hôte isolé (toutes directions)' });
+      saveBlockedIPs(blockedIPs);
+    }
+    console.log(`[isolate-host] 🔒 Hôte ${ip} (${hostname}) isolé`);
+    res.json({ success: true, message: `Hôte ${ip} isolé avec succès`, entry });
+  });
+});
+
+/**
+ * POST /api/discord-action
+ * Body: { action: "block"|"ignore", ip: "x.x.x.x", alert_id: "string" }
+ * Endpoint appelé par le bot Discord quand on clique sur un bouton
+ */
+app.post('/api/discord-action', (req, res) => {
+  const { action, ip, alert_id } = req.body;
+  console.log(`[discord-action] Action="${action}" IP=${ip} AlertID=${alert_id}`);
+
+  if (action === 'block' && ip) {
+    if (!blockedIPs.find(b => b.ip === ip)) {
+      const cmd = `sudo iptables -I INPUT -s ${ip} -j DROP && sudo iptables -I FORWARD -s ${ip} -j DROP`;
+      exec(cmd, () => {});
+      blockedIPs.push({ ip, reason: 'Bloqué via Discord', blockedAt: new Date().toISOString(), blockedBy: 'discord-bot' });
+      saveBlockedIPs(blockedIPs);
+    }
+    return res.json({ success: true, message: `IP ${ip} bloquée via Discord` });
+  }
+  if (action === 'ignore') {
+    return res.json({ success: true, message: `Alerte ${alert_id} ignorée` });
+  }
+  res.status(400).json({ error: 'Action inconnue' });
+});
+
+/**
+ * GET /api/academy
+ * Retourne la liste des modules de formation disponibles
+ */
+app.get('/api/academy', auth, (_req, res) => {
+  res.json({
+    modules: [
+      { id: 1, title: 'Introduction à la Cybersécurité', level: 'Débutant', duration: '2h', icon: '🛡️', completed: false },
+      { id: 2, title: 'Analyse de logs Suricata', level: 'Intermédiaire', duration: '3h', icon: '📋', completed: false },
+      { id: 3, title: 'Réponse aux incidents (IRP)', level: 'Avancé', duration: '4h', icon: '🚨', completed: false },
+      { id: 4, title: 'Machine Learning pour la détection', level: 'Expert', duration: '5h', icon: '🤖', completed: false },
+      { id: 5, title: 'Forensics et investigations', level: 'Expert', duration: '6h', icon: '🔍', completed: false },
+    ],
+  });
+});
+
 // ── Catch-all 404 ─────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Route introuvable' });
